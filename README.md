@@ -28,11 +28,11 @@ Example dense fused point cloud preview generated locally from the sample datase
 
 The workspace is not a framework or library. It is a set of focused scripts built around one captured dataset:
 
-- tracked input dataset: [`datasets/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/datasets/sample_eye1_2026-03-10A)
-- dataset-specific notes: [`datasets/README.md`](/home/sambit/Code/3Dstitch/datasets/README.md)
-- generated TSDF outputs: [`outputs`](/home/sambit/Code/3Dstitch/outputs)
-- generated photogrammetry outputs: [`outputs_photogrammetry`](/home/sambit/Code/3Dstitch/outputs_photogrammetry)
-- generated viewer manifests: [`viewer_data`](/home/sambit/Code/3Dstitch/viewer_data)
+- tracked input dataset: [`datasets/sample_eye1_2026-03-10A`](datasets/sample_eye1_2026-03-10A)
+- dataset-specific notes: [`datasets/README.md`](datasets/README.md)
+- generated TSDF outputs: `outputs/`
+- generated photogrammetry outputs: `outputs_photogrammetry/`
+- generated viewer manifests: `viewer_data/`
 
 Version-control policy in this repository:
 
@@ -117,17 +117,17 @@ Top-level structure:
 
 What each source file does:
 
-- [`tools/aruco_depth_tsdf.py`](/home/sambit/Code/3Dstitch/tools/aruco_depth_tsdf.py): main RGB-D reconstruction path. Detects ArUco markers, back-projects marker corners into 3D, estimates per-frame poses relative to the first frame, then fuses TSDF geometry with Open3D.
-- [`tools/rgb_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/rgb_photogrammetry.py): sparse RGB-only reconstruction using pycolmap.
-- [`tools/dense_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/dense_photogrammetry.py): dense stereo plus optional Poisson meshing on top of the sparse pycolmap result.
-- [`tools/export_recording_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_recording_viewer.py): converts a raw recording into per-frame JSON plus a manifest for [`viewer/index.html`](/home/sambit/Code/3Dstitch/viewer/index.html).
-- [`tools/export_reconstruction_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_reconstruction_viewer.py): exports the TSDF reconstruction and recovered camera trajectory into a viewer manifest.
-- [`tools/export_photogrammetry_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_photogrammetry_viewer.py): exports sparse or dense photogrammetry geometry into the same reconstruction-viewer format.
-- [`tools/export_comparison_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_comparison_viewer.py): aligns photogrammetry to TSDF and exports a combined comparison manifest.
-- [`viewer/index.html`](/home/sambit/Code/3Dstitch/viewer/index.html): static recording inspector for RGB image, depth preview, and sampled point cloud.
-- [`viewer/reconstruction.html`](/home/sambit/Code/3Dstitch/viewer/reconstruction.html): static viewer for one reconstruction manifest.
-- [`viewer/compare.html`](/home/sambit/Code/3Dstitch/viewer/compare.html): static viewer for overlaid TSDF and photogrammetry results.
-- [`context-from-chatgpt.md`](/home/sambit/Code/3Dstitch/context-from-chatgpt.md): design notes and project history. It is not executed, but it explains the thinking that led to the current architecture.
+- [`tools/aruco_depth_tsdf.py`](tools/aruco_depth_tsdf.py): main RGB-D reconstruction path. Detects ArUco markers, back-projects marker corners into 3D, estimates per-frame poses relative to the first frame, then fuses TSDF geometry with Open3D.
+- [`tools/rgb_photogrammetry.py`](tools/rgb_photogrammetry.py): sparse RGB-only reconstruction using pycolmap.
+- [`tools/dense_photogrammetry.py`](tools/dense_photogrammetry.py): dense stereo plus optional Poisson meshing on top of the sparse pycolmap result.
+- [`tools/export_recording_viewer.py`](tools/export_recording_viewer.py): converts a raw recording into per-frame JSON plus a manifest for [`viewer/index.html`](viewer/index.html).
+- [`tools/export_reconstruction_viewer.py`](tools/export_reconstruction_viewer.py): exports the TSDF reconstruction and recovered camera trajectory into a viewer manifest.
+- [`tools/export_photogrammetry_viewer.py`](tools/export_photogrammetry_viewer.py): exports sparse or dense photogrammetry geometry into the same reconstruction-viewer format.
+- [`tools/export_comparison_viewer.py`](tools/export_comparison_viewer.py): aligns photogrammetry to TSDF and exports a combined comparison manifest.
+- [`viewer/index.html`](viewer/index.html): static recording inspector for RGB image, depth preview, and sampled point cloud.
+- [`viewer/reconstruction.html`](viewer/reconstruction.html): static viewer for one reconstruction manifest.
+- [`viewer/compare.html`](viewer/compare.html): static viewer for overlaid TSDF and photogrammetry results.
+- [`context-from-chatgpt.md`](context-from-chatgpt.md): design notes and project history. It is not executed, but it explains the thinking that led to the current architecture.
 
 ## 3. Data model and naming contract
 
@@ -169,7 +169,7 @@ Required by the recording viewer exporter:
 
 Observed contents of one sample frame:
 
-- [`color_camera_info_20260310_171557.json`](/home/sambit/Code/3Dstitch/datasets/sample_eye1_2026-03-10A/color_camera_info_20260310_171557.json)
+- [`color_camera_info_20260310_171557.json`](datasets/sample_eye1_2026-03-10A/color_camera_info_20260310_171557.json)
   - width: `848`
   - height: `480`
   - `fx`, `fy`, `cx`, `cy`
@@ -183,13 +183,13 @@ Observed contents of one sample frame:
 - `tf_color_*.npz`
   - keys: `transform`, `rotation`, `translation`, `quaternion`
   - `transform` shape: `(4, 4)`
-- [`camera_pose_20260310_171557.json`](/home/sambit/Code/3Dstitch/datasets/sample_eye1_2026-03-10A/camera_pose_20260310_171557.json)
+- [`camera_pose_20260310_171557.json`](datasets/sample_eye1_2026-03-10A/camera_pose_20260310_171557.json)
   - camera pose in a `world` frame
   - includes `transform_matrix`, `camera_position`, and orientation
 
 ### 3.3 Tracked sample dataset
 
-The repository intentionally tracks one real sample recording at [`datasets/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/datasets/sample_eye1_2026-03-10A) so another engineer can reproduce the pipeline immediately after cloning.
+The repository intentionally tracks one real sample recording at [`datasets/sample_eye1_2026-03-10A`](datasets/sample_eye1_2026-03-10A) so another engineer can reproduce the pipeline immediately after cloning.
 
 Current sample summary:
 
@@ -262,19 +262,19 @@ Recommended baseline:
 
 - OS: Linux
 - Python: `3.11` or `3.12`
-- working directory: [`/home/sambit/Code/3Dstitch`](/home/sambit/Code/3Dstitch)
+- working directory: the repository root
 
 ### 5.1 Create the environment
 
 ```bash
-cd /home/sambit/Code/3Dstitch
+cd /path/to/clone/multiview-rgb-to-pointcloud
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -r requirements.txt
 ```
 
-Current Python dependencies from [`requirements.txt`](/home/sambit/Code/3Dstitch/requirements.txt):
+Current Python dependencies from [`requirements.txt`](requirements.txt):
 
 ```text
 numpy>=1.26,<3
@@ -304,7 +304,7 @@ python -m py_compile tools/*.py
 The HTML viewers use `fetch()`. Do not open them directly with `file://...`; serve the repository root over HTTP:
 
 ```bash
-cd /home/sambit/Code/3Dstitch
+cd /path/to/clone/multiview-rgb-to-pointcloud
 python -m http.server 8000
 ```
 
@@ -361,7 +361,7 @@ Important CLI options:
 
 Outputs:
 
-- [`outputs/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/outputs/sample_eye1_2026-03-10A)
+- `outputs/sample_eye1_2026-03-10A/`
   - `aruco_pose_summary.json`
   - `tsdf_mesh.ply`
   - `tsdf_pointcloud.ply`
@@ -409,7 +409,7 @@ Important CLI options:
 
 Primary outputs:
 
-- [`outputs_photogrammetry/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/outputs_photogrammetry/sample_eye1_2026-03-10A)
+- `outputs_photogrammetry/sample_eye1_2026-03-10A/`
   - `database.db`
   - `model/`
   - `sparse_points.ply`
@@ -487,7 +487,7 @@ What happens under the hood:
 
 ## 7.1 ArUco + depth + TSDF pipeline
 
-Source file: [`tools/aruco_depth_tsdf.py`](/home/sambit/Code/3Dstitch/tools/aruco_depth_tsdf.py)
+Source file: [`tools/aruco_depth_tsdf.py`](tools/aruco_depth_tsdf.py)
 
 ### Step A: enumerate usable frames
 
@@ -590,7 +590,7 @@ This file is the ground truth for the reconstruction viewer exporter.
 
 ## 7.2 Sparse RGB photogrammetry pipeline
 
-Source file: [`tools/rgb_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/rgb_photogrammetry.py)
+Source file: [`tools/rgb_photogrammetry.py`](tools/rgb_photogrammetry.py)
 
 ### Step A: image collection and intrinsics
 
@@ -631,7 +631,7 @@ The script writes:
 
 ## 7.3 Dense photogrammetry pipeline
 
-Source file: [`tools/dense_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/dense_photogrammetry.py)
+Source file: [`tools/dense_photogrammetry.py`](tools/dense_photogrammetry.py)
 
 Pipeline stages:
 
@@ -646,7 +646,7 @@ The script currently fuses with `input_type="geometric"`.
 
 ## 7.4 Comparison alignment pipeline
 
-Source file: [`tools/export_comparison_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_comparison_viewer.py)
+Source file: [`tools/export_comparison_viewer.py`](tools/export_comparison_viewer.py)
 
 This exporter solves a practical problem: the TSDF and photogrammetry outputs do not naturally share a coordinate system.
 
@@ -701,7 +701,7 @@ This is not intended for million-point clouds or production visualization. It is
 
 ### 8.1 Recording viewer
 
-Source: [`viewer/index.html`](/home/sambit/Code/3Dstitch/viewer/index.html)
+Source: [`viewer/index.html`](viewer/index.html)
 
 Shows:
 
@@ -714,7 +714,7 @@ Shows:
 
 ### 8.2 Reconstruction viewer
 
-Source: [`viewer/reconstruction.html`](/home/sambit/Code/3Dstitch/viewer/reconstruction.html)
+Source: [`viewer/reconstruction.html`](viewer/reconstruction.html)
 
 Shows:
 
@@ -726,7 +726,7 @@ Shows:
 
 ### 8.3 Comparison viewer
 
-Source: [`viewer/compare.html`](/home/sambit/Code/3Dstitch/viewer/compare.html)
+Source: [`viewer/compare.html`](viewer/compare.html)
 
 Shows:
 
@@ -740,7 +740,7 @@ Shows:
 
 ## 9.1 TSDF output directory
 
-Example after running the sample dataset: [`outputs/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/outputs/sample_eye1_2026-03-10A)
+Example after running the sample dataset: `outputs/sample_eye1_2026-03-10A/`
 
 - `aruco_pose_summary.json`
   - master diagnostic record for the TSDF path
@@ -752,7 +752,7 @@ Example after running the sample dataset: [`outputs/sample_eye1_2026-03-10A`](/h
 
 ## 9.2 Photogrammetry output directory
 
-Example after running the sample dataset: [`outputs_photogrammetry/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/outputs_photogrammetry/sample_eye1_2026-03-10A)
+Example after running the sample dataset: `outputs_photogrammetry/sample_eye1_2026-03-10A/`
 
 - `database.db`
   - pycolmap/COLMAP feature and match database
@@ -775,10 +775,10 @@ Example after running the sample dataset: [`outputs_photogrammetry/sample_eye1_2
 
 Example subdirectories:
 
-- [`viewer_data/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/viewer_data/sample_eye1_2026-03-10A)
-- [`viewer_data/reconstruction/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/viewer_data/reconstruction/sample_eye1_2026-03-10A)
-- [`viewer_data/photogrammetry/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/viewer_data/photogrammetry/sample_eye1_2026-03-10A)
-- [`viewer_data/comparison/sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/viewer_data/comparison/sample_eye1_2026-03-10A)
+- `viewer_data/sample_eye1_2026-03-10A/`
+- `viewer_data/reconstruction/sample_eye1_2026-03-10A/`
+- `viewer_data/photogrammetry/sample_eye1_2026-03-10A/`
+- `viewer_data/comparison/sample_eye1_2026-03-10A/`
 
 These are static JSON payloads for the browser. They are not canonical source data. They can always be regenerated from the raw recording and reconstruction outputs.
 They are excluded from git on purpose.
@@ -791,7 +791,7 @@ These are the current issues another engineer should know before trusting or ext
 2. Git LFS is not configured in this environment. The tracked sample dataset is small enough for normal git, but larger future recordings should move to Git LFS before being committed.
 3. The ArUco TSDF world frame is only the first frame, not a calibrated robot/world frame.
 4. The recording viewer trusts the stored transforms without verifying whether they are camera-to-world or world-to-camera.
-5. The `--max-num-features` argument in [`tools/rgb_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/rgb_photogrammetry.py) is parsed but not currently assigned into `FeatureExtractionOptions`. If feature count control matters, wire that argument through explicitly.
+5. The `--max-num-features` argument in [`tools/rgb_photogrammetry.py`](tools/rgb_photogrammetry.py) is parsed but not currently assigned into `FeatureExtractionOptions`. If feature count control matters, wire that argument through explicitly.
 6. The photogrammetry path assumes one shared camera intrinsics model for all images.
 7. The browser viewers intentionally use canvas instead of WebGL, so very large clouds will become slow.
 8. The comparison alignment relies on shared timestamps. If future datasets rename images or drop frames asymmetrically, the comparison exporter will fail until the association logic is extended.
@@ -812,7 +812,7 @@ If this project is going to continue beyond one-off reconstruction experiments, 
 
 ## 12. Quick command reference
 
-From [`/home/sambit/Code/3Dstitch`](/home/sambit/Code/3Dstitch):
+From the repository root:
 
 ```bash
 source .venv/bin/activate
@@ -848,9 +848,9 @@ python -m http.server 8000
 
 If a new engineer only reads a few files first, start here:
 
-1. [`README.md`](/home/sambit/Code/3Dstitch/README.md)
-2. [`tools/aruco_depth_tsdf.py`](/home/sambit/Code/3Dstitch/tools/aruco_depth_tsdf.py)
-3. [`tools/rgb_photogrammetry.py`](/home/sambit/Code/3Dstitch/tools/rgb_photogrammetry.py)
-4. [`tools/export_comparison_viewer.py`](/home/sambit/Code/3Dstitch/tools/export_comparison_viewer.py)
-5. [`viewer/reconstruction.html`](/home/sambit/Code/3Dstitch/viewer/reconstruction.html)
-6. [`context-from-chatgpt.md`](/home/sambit/Code/3Dstitch/context-from-chatgpt.md)
+1. [`README.md`](README.md)
+2. [`tools/aruco_depth_tsdf.py`](tools/aruco_depth_tsdf.py)
+3. [`tools/rgb_photogrammetry.py`](tools/rgb_photogrammetry.py)
+4. [`tools/export_comparison_viewer.py`](tools/export_comparison_viewer.py)
+5. [`viewer/reconstruction.html`](viewer/reconstruction.html)
+6. [`context-from-chatgpt.md`](context-from-chatgpt.md)

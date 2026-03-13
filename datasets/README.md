@@ -8,7 +8,7 @@ pipeline.
 
 Current tracked dataset:
 
-- [`sample_eye1_2026-03-10A`](/home/sambit/Code/3Dstitch/datasets/sample_eye1_2026-03-10A)
+- [`sample_eye1_2026-03-10A`](sample_eye1_2026-03-10A)
 
 Observed properties of the sample:
 
@@ -46,7 +46,7 @@ Not tracked:
 - `.venv/`
 
 Those directories are intentionally regenerated from the tracked sample using the
-commands in [`README.md`](/home/sambit/Code/3Dstitch/README.md).
+commands in [`README.md`](../README.md).
 
 ## Note on Git LFS
 
