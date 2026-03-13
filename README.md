@@ -20,9 +20,9 @@ Four representative RGB frames from the tracked sample recording:
 
 ![Sample RGB frames](docs/assets/sample_rgb_grid.jpg)
 
-Example dense fused point cloud preview generated locally from the sample dataset's photogrammetry output:
+Shared-view reconstruction previews generated locally from the sample dataset outputs. The photogrammetry cloud is aligned into the TSDF frame and both renders use the same orientation and scale:
 
-![Dense point cloud preview](docs/assets/dense_pointcloud_preview.png)
+![TSDF and photogrammetry comparison preview](docs/assets/reconstruction_comparison_preview.png)
 
 ## 1. Repository intent and current scope
 
@@ -71,7 +71,7 @@ Top-level structure:
 ├── docs/
 │   └── assets/
 │       ├── sample_rgb_grid.jpg
-│       └── dense_pointcloud_preview.png
+│       └── reconstruction_comparison_preview.png
 ├── datasets/
 │   ├── README.md
 │   └── sample_eye1_2026-03-10A/
@@ -90,7 +90,8 @@ Top-level structure:
 │   ├── export_recording_viewer.py
 │   ├── export_reconstruction_viewer.py
 │   ├── export_photogrammetry_viewer.py
-│   └── export_comparison_viewer.py
+│   ├── export_comparison_viewer.py
+│   └── generate_readme_previews.py
 ├── outputs/
 │   └── <dataset_name>/
 │       ├── aruco_pose_summary.json
@@ -124,6 +125,7 @@ What each source file does:
 - [`tools/export_reconstruction_viewer.py`](tools/export_reconstruction_viewer.py): exports the TSDF reconstruction and recovered camera trajectory into a viewer manifest.
 - [`tools/export_photogrammetry_viewer.py`](tools/export_photogrammetry_viewer.py): exports sparse or dense photogrammetry geometry into the same reconstruction-viewer format.
 - [`tools/export_comparison_viewer.py`](tools/export_comparison_viewer.py): aligns photogrammetry to TSDF and exports a combined comparison manifest.
+- [`tools/generate_readme_previews.py`](tools/generate_readme_previews.py): regenerates the tracked README preview images from the sample dataset and the locally generated reconstruction outputs.
 - [`viewer/index.html`](viewer/index.html): static recording inspector for RGB image, depth preview, and sampled point cloud.
 - [`viewer/reconstruction.html`](viewer/reconstruction.html): static viewer for one reconstruction manifest.
 - [`viewer/compare.html`](viewer/compare.html): static viewer for overlaid TSDF and photogrammetry results.
