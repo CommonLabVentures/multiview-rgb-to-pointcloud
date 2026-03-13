@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3Dstitch Recording Viewer</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #fffaf3;
+      --line: #d9c9b5;
+      --ink: #231b14;
+      --muted: #756555;
+      --accent: #b2572d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(178, 87, 45, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8f2ea 0%, var(--bg) 100%);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 0.02em;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .controls,
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .controls {
+      grid-template-columns: 1fr auto auto auto;
+      align-items: center;
+      background: rgba(255, 250, 243, 0.88);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px 16px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      grid-template-columns: 1.1fr 0.9fr;
+    }
+
+    .panel {
+      background: rgba(255, 250, 243, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(35, 27, 20, 0.08);
+    }
+
+    .media-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .media-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #f0e7dd;
+    }
+
+    .media-card img,
+    .media-card canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 848 / 480;
+      object-fit: cover;
+      background: #dac8b4;
+    }
+
+    .label {
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+
+    #pointcloud {
+      width: 100%;
+      height: min(72vh, 820px);
+      display: block;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(178, 87, 45, 0.15), transparent 32%),
+        linear-gradient(180deg, #f9f4ee 0%, #efe4d7 100%);
+      cursor: grab;
+    }
+
+    #pointcloud.dragging {
+      cursor: grabbing;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .stat-title {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-value {
+      margin-top: 6px;
+      font-size: 1rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: transparent;
+      color: var(--accent);
+    }
+
+    @media (max-width: 980px) {
+      .controls,
+      .grid,
+      .media-grid {
+        grid-template-columns: 1fr;
+      }
+
+      #pointcloud {
+        height: 55vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Recording inspection UI: per-frame RGB, depth preview, and sampled point cloud. -->
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>3Dstitch Recording Viewer</h1>
+        <div id="datasetName" class="subtle">Loading dataset...</div>
+      </div>
+      <div class="subtle">Drag to orbit, wheel to zoom</div>
+    </div>
+
+    <div class="controls panel">
+      <input id="frameSlider" type="range" min="0" max="0" step="1" value="0">
+      <div id="frameLabel">Frame 0</div>
+      <button id="playButton">Play</button>
+      <button id="accumulateButton" class="secondary">Accumulate: Off</button>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="media-grid">
+          <div class="media-card">
+            <img id="rgbImage" alt="RGB frame">
+            <div class="label">RGB</div>
+          </div>
+          <div class="media-card">
+            <canvas id="depthCanvas" width="212" height="120"></canvas>
+            <div class="label">Aligned depth preview</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-title">Timestamp</div>
+            <div id="timestampStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Point Count</div>
+            <div id="pointCountStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Depth Range</div>
+            <div id="depthRangeStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Camera Position</div>
+            <div id="cameraStat" class="stat-value">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <canvas id="pointcloud" width="900" height="900"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // The viewer is a dependency-free static page. It expects a manifest generated
+    // by `tools/export_recording_viewer.py` and a simple static file server.
+    const params = new URLSearchParams(window.location.search);
+    const manifestPath = params.get("manifest") || "../viewer_data/sample_eye1_2026-03-10A/manifest.json";
+
+    // Camera/orbit state plus an in-memory cache of per-frame JSON payloads.
+    const state = {
+      manifest: null,
+      frameIndex: 0,
+      frameCache: new Map(),
+      accumulate: false,
+      yaw: 0.8,
+      pitch: -0.45,
+      zoom: 1.8,
+      target: [0, 0, 0],
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+    };
+
+    const slider = document.getElementById("frameSlider");
+    const frameLabel = document.getElementById("frameLabel");
+    const playButton = document.getElementById("playButton");
+    const accumulateButton = document.getElementById("accumulateButton");
+    const datasetName = document.getElementById("datasetName");
+    const rgbImage = document.getElementById("rgbImage");
+    const depthCanvas = document.getElementById("depthCanvas");
+    const cloudCanvas = document.getElementById("pointcloud");
+    const timestampStat = document.getElementById("timestampStat");
+    const pointCountStat = document.getElementById("pointCountStat");
+    const depthRangeStat = document.getElementById("depthRangeStat");
+    const cameraStat = document.getElementById("cameraStat");
+
+    let playTimer = null;
+
+    function vec3(x, y, z) {
+      return [x, y, z];
+    }
+
+    function sub(a, b) {
+      return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    }
+
+    function length3(v) {
+      return Math.hypot(v[0], v[1], v[2]);
+    }
+
+    function averagePoint(bounds) {
+      return [
+        (bounds.min[0] + bounds.max[0]) * 0.5,
+        (bounds.min[1] + bounds.max[1]) * 0.5,
+        (bounds.min[2] + bounds.max[2]) * 0.5,
+      ];
+    }
+
+    async function loadJson(path) {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`Failed to load ${path}: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function loadFrame(index) {
+      if (state.frameCache.has(index)) {
+        return state.frameCache.get(index);
+      }
+      const frame = state.manifest.frames[index];
+      const payload = await loadJson(`../${frame.frame_path}`);
+      state.frameCache.set(index, payload);
+      return payload;
+    }
+
+    function drawDepthPreview(preview) {
+      // Depth previews are stored as grayscale bytes to keep frame JSON compact.
+      depthCanvas.width = preview.width;
+      depthCanvas.height = preview.height;
+      const ctx = depthCanvas.getContext("2d");
+      const image = ctx.createImageData(preview.width, preview.height);
+      for (let i = 0; i < preview.pixels.length; i += 1) {
+        const value = preview.pixels[i];
+        const offset = i * 4;
+        image.data[offset + 0] = value;
+        image.data[offset + 1] = value;
+        image.data[offset + 2] = value;
+        image.data[offset + 3] = value === 0 ? 0 : 255;
+      }
+      ctx.putImageData(image, 0, 0);
+    }
+
+    function rotatePoint(point) {
+      // Apply a simple yaw/pitch orbit transform around the current scene target.
+      const dx = point[0] - state.target[0];
+      const dy = point[1] - state.target[1];
+      const dz = point[2] - state.target[2];
+
+      const cy = Math.cos(state.yaw);
+      const sy = Math.sin(state.yaw);
+      const cp = Math.cos(state.pitch);
+      const sp = Math.sin(state.pitch);
+
+      const x1 = cy * dx + sy * dz;
+      const z1 = -sy * dx + cy * dz;
+      const y1 = cp * dy - sp * z1;
+      const z2 = sp * dy + cp * z1;
+      return [x1, y1, z2];
+    }
+
+    function projectPoint(point, width, height, scale) {
+      const rotated = rotatePoint(point);
+      const depth = rotated[2] + state.zoom * scale * 2.2;
+      if (depth <= 0.01) {
+        return null;
+      }
+      const focal = Math.min(width, height) * 0.75;
+      return {
+        x: width * 0.5 + (rotated[0] * focal) / depth,
+        y: height * 0.5 - (rotated[1] * focal) / depth,
+        depth,
+      };
+    }
+
+    function collectPoints() {
+      // In accumulate mode the viewer overlays all cached frames; otherwise it
+      // shows only the currently selected frame's sampled point cloud.
+      const frames = state.accumulate
+        ? Array.from(state.frameCache.values())
+        : [state.frameCache.get(state.frameIndex)].filter(Boolean);
+      const points = [];
+      for (const frame of frames) {
+        if (!frame) {
+          continue;
+        }
+        const flat = frame.points;
+        for (let i = 0; i < flat.length; i += 3) {
+          points.push([flat[i], flat[i + 1], flat[i + 2]]);
+        }
+      }
+      return points;
+    }
+
+    function drawGrid(ctx, width, height, scale) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(117, 101, 85, 0.22)";
+      for (let i = -4; i <= 4; i += 1) {
+        const a = projectPoint(vec3(i * 0.05, 0, -0.2), width, height, scale);
+        const b = projectPoint(vec3(i * 0.05, 0, 0.2), width, height, scale);
+        const c = projectPoint(vec3(-0.2, 0, i * 0.05), width, height, scale);
+        const d = projectPoint(vec3(0.2, 0, i * 0.05), width, height, scale);
+        if (a && b) {
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        if (c && d) {
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y);
+          ctx.lineTo(d.x, d.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawAxes(ctx, width, height, scale) {
+      const axes = [
+        { point: vec3(0.12, 0, 0), color: "#d1495b" },
+        { point: vec3(0, 0.12, 0), color: "#2a9d8f" },
+        { point: vec3(0, 0, 0.12), color: "#3a86ff" },
+      ];
+      const origin = projectPoint(vec3(0, 0, 0), width, height, scale);
+      if (!origin) {
+        return;
+      }
+      for (const axis of axes) {
+        const end = projectPoint(axis.point, width, height, scale);
+        if (!end) {
+          continue;
+        }
+        ctx.strokeStyle = axis.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      }
+    }
+
+    function drawPointCloud() {
+      const ctx = cloudCanvas.getContext("2d");
+      const width = cloudCanvas.width;
+      const height = cloudCanvas.height;
+      ctx.clearRect(0, 0, width, height);
+
+      if (!state.manifest) {
+        return;
+      }
+
+      const bounds = state.manifest.bounds;
+      const span = sub(bounds.max, bounds.min);
+      const scale = Math.max(length3(span), 0.3);
+
+      drawGrid(ctx, width, height, scale);
+      drawAxes(ctx, width, height, scale);
+
+      const points = collectPoints();
+      const projected = [];
+      for (const point of points) {
+        const p = projectPoint(point, width, height, scale);
+        if (p) {
+          const t = (point[2] - bounds.min[2]) / Math.max(bounds.max[2] - bounds.min[2], 1e-6);
+          projected.push({ ...p, t });
+        }
+      }
+
+      projected.sort((a, b) => b.depth - a.depth);
+      // Painter's algorithm ordering is sufficient here because the goal is a
+      // lightweight inspection viewer, not a full WebGL renderer.
+      for (const point of projected) {
+        const r = Math.floor(206 - point.t * 54);
+        const g = Math.floor(112 + point.t * 62);
+        const b = Math.floor(55 + point.t * 120);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.82)`;
+        const radius = Math.max(1.2, 4.2 - point.depth * 0.55);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    async function renderFrame(index) {
+      // Update both the 2D media panes and the 3D point-cloud pane together so
+      // the operator can correlate camera pose, image content, and sampled depth.
+      state.frameIndex = index;
+      const frame = await loadFrame(index);
+      frameLabel.textContent = `Frame ${index + 1} / ${state.manifest.frames.length}`;
+      slider.value = index;
+      rgbImage.src = `../${frame.image_path}`;
+      drawDepthPreview(frame.depth_preview);
+      timestampStat.textContent = frame.timestamp;
+      pointCountStat.textContent = frame.point_count.toLocaleString();
+      depthRangeStat.textContent = frame.depth_stats.min === null
+        ? "No valid depth"
+        : `${frame.depth_stats.min.toFixed(3)}m to ${frame.depth_stats.max.toFixed(3)}m`;
+      cameraStat.textContent = frame.camera_position.map(v => v.toFixed(3)).join(", ");
+      drawPointCloud();
+    }
+
+    async function preloadAllFrames() {
+      const jobs = state.manifest.frames.map((_, index) => loadFrame(index));
+      await Promise.all(jobs);
+    }
+
+    function togglePlayback() {
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        playButton.textContent = "Play";
+        return;
+      }
+      playButton.textContent = "Pause";
+      playTimer = setInterval(() => {
+        const next = (state.frameIndex + 1) % state.manifest.frames.length;
+        renderFrame(next);
+      }, 450);
+    }
+
+    async function toggleAccumulate() {
+      state.accumulate = !state.accumulate;
+      accumulateButton.textContent = `Accumulate: ${state.accumulate ? "On" : "Off"}`;
+      accumulateButton.classList.toggle("secondary", !state.accumulate);
+      if (state.accumulate) {
+        await preloadAllFrames();
+      }
+      drawPointCloud();
+    }
+
+    function attachInteractions() {
+      // Orbit interaction is implemented manually so the page stays completely
+      // self-contained and can run without any JS dependencies.
+      slider.addEventListener("input", event => {
+        renderFrame(Number(event.target.value));
+      });
+      playButton.addEventListener("click", togglePlayback);
+      accumulateButton.addEventListener("click", toggleAccumulate);
+
+      cloudCanvas.addEventListener("pointerdown", event => {
+        state.dragging = true;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        cloudCanvas.classList.add("dragging");
+      });
+
+      window.addEventListener("pointerup", () => {
+        state.dragging = false;
+        cloudCanvas.classList.remove("dragging");
+      });
+
+      window.addEventListener("pointermove", event => {
+        if (!state.dragging) {
+          return;
+        }
+        const dx = event.clientX - state.lastX;
+        const dy = event.clientY - state.lastY;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        state.yaw += dx * 0.01;
+        state.pitch = Math.max(-1.4, Math.min(1.2, state.pitch + dy * 0.01));
+        drawPointCloud();
+      });
+
+      cloudCanvas.addEventListener("wheel", event => {
+        event.preventDefault();
+        state.zoom = Math.max(0.4, Math.min(4.5, state.zoom + event.deltaY * 0.0015));
+        drawPointCloud();
+      }, { passive: false });
+
+      window.addEventListener("resize", drawPointCloud);
+    }
+
+    async function init() {
+      state.manifest = await loadJson(manifestPath);
+      datasetName.textContent = `${state.manifest.dataset} | ${state.manifest.frames.length} frames | point stride ${state.manifest.point_stride}`;
+      slider.max = String(state.manifest.frames.length - 1);
+      state.target = averagePoint(state.manifest.bounds);
+      attachInteractions();
+      await renderFrame(0);
+    }
+
+    init().catch(error => {
+      datasetName.textContent = error.message;
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

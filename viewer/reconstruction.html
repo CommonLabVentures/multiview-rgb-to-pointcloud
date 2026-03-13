@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3Dstitch Reconstruction Viewer</title>
+  <style>
+    :root {
+      --bg: #e9efe7;
+      --panel: rgba(249, 252, 247, 0.92);
+      --line: #bfd0be;
+      --ink: #182319;
+      --muted: #5c6f5d;
+      --accent: #28795c;
+      --accent-soft: #d9efe5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Baskerville", "Georgia", serif;
+      background:
+        radial-gradient(circle at top right, rgba(40, 121, 92, 0.16), transparent 26%),
+        linear-gradient(180deg, #f2f6ef 0%, var(--bg) 100%);
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 0.01em;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 14px;
+      box-shadow: 0 12px 30px rgba(24, 35, 25, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    #scene {
+      width: 100%;
+      height: min(80vh, 920px);
+      display: block;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(40, 121, 92, 0.16), transparent 30%),
+        linear-gradient(180deg, #f9fcf7 0%, #e3ede0 100%);
+      cursor: grab;
+    }
+
+    #scene.dragging {
+      cursor: grabbing;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      color: var(--accent);
+      background: transparent;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .stat-title {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-value {
+      margin-top: 6px;
+      font-size: 1rem;
+    }
+
+    .traj-panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .traj-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .traj-list {
+      max-height: min(60vh, 760px);
+      overflow: auto;
+    }
+
+    .traj-item {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid rgba(191, 208, 190, 0.7);
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink);
+      padding: 12px 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .traj-item:hover,
+    .traj-item.active {
+      background: var(--accent-soft);
+    }
+
+    .traj-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 1024px) {
+      .layout,
+      .stats,
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      #scene {
+        height: 56vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Reconstruction viewer: sampled fused geometry plus recovered camera path. -->
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>3Dstitch Reconstruction Viewer</h1>
+        <div id="datasetName" class="subtle">Loading reconstruction...</div>
+      </div>
+      <div class="subtle">Drag to orbit, wheel to zoom, click a frame to highlight its pose</div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="toolbar">
+          <button id="toggleGeometry">Geometry: On</button>
+          <button id="toggleTrajectory" class="secondary">Trajectory: On</button>
+          <button id="resetView" class="secondary">Reset View</button>
+        </div>
+        <canvas id="scene" width="960" height="960"></canvas>
+      </div>
+
+      <div class="panel">
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-title">Dictionary</div>
+            <div id="dictionaryStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Frames Fused</div>
+            <div id="frameCountStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">TSDF Points</div>
+            <div id="pointCountStat" class="stat-value">-</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Highlighted Pose</div>
+            <div id="highlightStat" class="stat-value">-</div>
+          </div>
+        </div>
+
+        <div class="traj-panel">
+          <div class="traj-head">
+            <div>Recovered camera trajectory</div>
+            <div id="trajSummary" class="subtle">-</div>
+          </div>
+          <div id="trajList" class="traj-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // The reconstruction page renders a single manifest exported from either the
+    // TSDF or photogrammetry export scripts.
+    const params = new URLSearchParams(window.location.search);
+    const manifestPath = params.get("manifest") || "../viewer_data/reconstruction/sample_eye1_2026-03-10A/reconstruction_manifest.json";
+
+    // Shared orbit-camera and visibility state for the 2D canvas renderer.
+    const state = {
+      manifest: null,
+      yaw: 0.85,
+      pitch: -0.48,
+      zoom: 2.0,
+      target: [0, 0, 0],
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+      showGeometry: true,
+      showTrajectory: true,
+      highlightedTrajectoryIndex: 0,
+    };
+
+    const datasetName = document.getElementById("datasetName");
+    const dictionaryStat = document.getElementById("dictionaryStat");
+    const frameCountStat = document.getElementById("frameCountStat");
+    const pointCountStat = document.getElementById("pointCountStat");
+    const highlightStat = document.getElementById("highlightStat");
+    const trajSummary = document.getElementById("trajSummary");
+    const trajList = document.getElementById("trajList");
+    const sceneCanvas = document.getElementById("scene");
+    const toggleGeometry = document.getElementById("toggleGeometry");
+    const toggleTrajectory = document.getElementById("toggleTrajectory");
+    const resetView = document.getElementById("resetView");
+
+    function sub(a, b) {
+      return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    }
+
+    function length3(v) {
+      return Math.hypot(v[0], v[1], v[2]);
+    }
+
+    function averagePoint(bounds) {
+      return [
+        (bounds.min[0] + bounds.max[0]) * 0.5,
+        (bounds.min[1] + bounds.max[1]) * 0.5,
+        (bounds.min[2] + bounds.max[2]) * 0.5,
+      ];
+    }
+
+    async function loadJson(path) {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`Failed to load ${path}: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    function rotatePoint(point) {
+      // Apply a manual orbit transform around the current bounding-box center.
+      const dx = point[0] - state.target[0];
+      const dy = point[1] - state.target[1];
+      const dz = point[2] - state.target[2];
+
+      const cy = Math.cos(state.yaw);
+      const sy = Math.sin(state.yaw);
+      const cp = Math.cos(state.pitch);
+      const sp = Math.sin(state.pitch);
+
+      const x1 = cy * dx + sy * dz;
+      const z1 = -sy * dx + cy * dz;
+      const y1 = cp * dy - sp * z1;
+      const z2 = sp * dy + cp * z1;
+      return [x1, y1, z2];
+    }
+
+    function projectPoint(point, width, height, scale) {
+      const rotated = rotatePoint(point);
+      const depth = rotated[2] + state.zoom * scale * 2.1;
+      if (depth <= 0.01) {
+        return null;
+      }
+      const focal = Math.min(width, height) * 0.78;
+      return {
+        x: width * 0.5 + (rotated[0] * focal) / depth,
+        y: height * 0.5 - (rotated[1] * focal) / depth,
+        depth,
+      };
+    }
+
+    function drawGrid(ctx, width, height, scale) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(92, 111, 93, 0.22)";
+      for (let i = -5; i <= 5; i += 1) {
+        const a = projectPoint([i * 0.05, 0, -0.25], width, height, scale);
+        const b = projectPoint([i * 0.05, 0, 0.25], width, height, scale);
+        const c = projectPoint([-0.25, 0, i * 0.05], width, height, scale);
+        const d = projectPoint([0.25, 0, i * 0.05], width, height, scale);
+        if (a && b) {
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        if (c && d) {
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y);
+          ctx.lineTo(d.x, d.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawAxes(ctx, width, height, scale) {
+      const origin = projectPoint([0, 0, 0], width, height, scale);
+      if (!origin) {
+        return;
+      }
+      const axes = [
+        { point: [0.12, 0, 0], color: "#ce4257" },
+        { point: [0, 0.12, 0], color: "#2a9d8f" },
+        { point: [0, 0, 0.12], color: "#3a86ff" },
+      ];
+      for (const axis of axes) {
+        const end = projectPoint(axis.point, width, height, scale);
+        if (!end) {
+          continue;
+        }
+        ctx.strokeStyle = axis.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      }
+    }
+
+    function drawGeometry(ctx, width, height, scale) {
+      if (!state.showGeometry) {
+        return;
+      }
+      // Geometry is stored as flat xyz and rgb byte arrays for fast browser-side
+      // parsing without additional schema conversion.
+      const points = state.manifest.points;
+      const colors = state.manifest.colors;
+      const projected = [];
+      for (let i = 0; i < points.length; i += 3) {
+        const projectedPoint = projectPoint(
+          [points[i], points[i + 1], points[i + 2]],
+          width,
+          height,
+          scale
+        );
+        if (!projectedPoint) {
+          continue;
+        }
+        projected.push({
+          ...projectedPoint,
+          color: [colors[i], colors[i + 1], colors[i + 2]],
+        });
+      }
+      projected.sort((a, b) => b.depth - a.depth);
+      for (const point of projected) {
+        ctx.fillStyle = `rgba(${point.color[0]}, ${point.color[1]}, ${point.color[2]}, 0.78)`;
+        const radius = Math.max(0.8, 3.8 - point.depth * 0.55);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawTrajectory(ctx, width, height, scale) {
+      if (!state.showTrajectory) {
+        return;
+      }
+      // The trajectory is drawn after the geometry so active camera poses remain
+      // visually prominent on top of the point cloud.
+      const projected = state.manifest.trajectory.map((item, index) => ({
+        index,
+        item,
+        point: projectPoint(item.position, width, height, scale),
+      })).filter(entry => entry.point);
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(40, 121, 92, 0.9)";
+      ctx.beginPath();
+      let started = false;
+      for (const entry of projected) {
+        if (!started) {
+          ctx.moveTo(entry.point.x, entry.point.y);
+          started = true;
+        } else {
+          ctx.lineTo(entry.point.x, entry.point.y);
+        }
+      }
+      ctx.stroke();
+
+      for (const entry of projected) {
+        const active = entry.index === state.highlightedTrajectoryIndex;
+        ctx.fillStyle = active ? "#ce4257" : "#28795c";
+        ctx.beginPath();
+        ctx.arc(entry.point.x, entry.point.y, active ? 6 : 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawScene() {
+      const ctx = sceneCanvas.getContext("2d");
+      const width = sceneCanvas.width;
+      const height = sceneCanvas.height;
+      ctx.clearRect(0, 0, width, height);
+      if (!state.manifest) {
+        return;
+      }
+      const span = sub(state.manifest.bounds.max, state.manifest.bounds.min);
+      const scale = Math.max(length3(span), 0.35);
+      drawGrid(ctx, width, height, scale);
+      drawAxes(ctx, width, height, scale);
+      drawGeometry(ctx, width, height, scale);
+      drawTrajectory(ctx, width, height, scale);
+    }
+
+    function highlightTrajectory(index) {
+      // Clicking a list entry highlights the corresponding trajectory sample and
+      // exposes its registration error in the side panel.
+      state.highlightedTrajectoryIndex = index;
+      const pose = state.manifest.trajectory[index];
+      highlightStat.textContent = `${pose.timestamp} | ${pose.mean_error_m.toFixed(4)}m mean error`;
+      for (const node of trajList.children) {
+        node.classList.toggle("active", Number(node.dataset.index) === index);
+      }
+      drawScene();
+    }
+
+    function buildTrajectoryList() {
+      trajList.innerHTML = "";
+      state.manifest.trajectory.forEach((pose, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "traj-item";
+        button.dataset.index = String(index);
+        button.innerHTML = `
+          <div>
+            <div>${pose.timestamp}</div>
+            <div class="traj-meta">${pose.inlier_count} inliers / ${pose.correspondence_count} correspondences</div>
+          </div>
+          <div class="traj-meta">${pose.mean_error_m.toFixed(4)}m</div>
+        `;
+        button.addEventListener("click", () => highlightTrajectory(index));
+        trajList.appendChild(button);
+      });
+      highlightTrajectory(0);
+    }
+
+    function attachInteractions() {
+      // Manual pointer handling keeps this viewer portable and dependency-free.
+      sceneCanvas.addEventListener("pointerdown", event => {
+        state.dragging = true;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        sceneCanvas.classList.add("dragging");
+      });
+
+      window.addEventListener("pointerup", () => {
+        state.dragging = false;
+        sceneCanvas.classList.remove("dragging");
+      });
+
+      window.addEventListener("pointermove", event => {
+        if (!state.dragging) {
+          return;
+        }
+        const dx = event.clientX - state.lastX;
+        const dy = event.clientY - state.lastY;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        state.yaw += dx * 0.01;
+        state.pitch = Math.max(-1.4, Math.min(1.2, state.pitch + dy * 0.01));
+        drawScene();
+      });
+
+      sceneCanvas.addEventListener("wheel", event => {
+        event.preventDefault();
+        state.zoom = Math.max(0.4, Math.min(4.5, state.zoom + event.deltaY * 0.0015));
+        drawScene();
+      }, { passive: false });
+
+      toggleGeometry.addEventListener("click", () => {
+        state.showGeometry = !state.showGeometry;
+        toggleGeometry.textContent = `Geometry: ${state.showGeometry ? "On" : "Off"}`;
+        toggleGeometry.classList.toggle("secondary", !state.showGeometry);
+        drawScene();
+      });
+
+      toggleTrajectory.addEventListener("click", () => {
+        state.showTrajectory = !state.showTrajectory;
+        toggleTrajectory.textContent = `Trajectory: ${state.showTrajectory ? "On" : "Off"}`;
+        toggleTrajectory.classList.toggle("secondary", !state.showTrajectory);
+        drawScene();
+      });
+
+      resetView.addEventListener("click", () => {
+        state.yaw = 0.85;
+        state.pitch = -0.48;
+        state.zoom = 2.0;
+        drawScene();
+      });
+
+      window.addEventListener("resize", drawScene);
+    }
+
+    async function init() {
+      state.manifest = await loadJson(manifestPath);
+      datasetName.textContent = `${state.manifest.dataset} | ${state.manifest.viewer_point_count.toLocaleString()} sampled points for browser view`;
+      dictionaryStat.textContent = state.manifest.dictionary;
+      frameCountStat.textContent = state.manifest.successful_pose_count.toLocaleString();
+      pointCountStat.textContent = `${state.manifest.geometry_point_count.toLocaleString()} total / ${state.manifest.viewer_point_count.toLocaleString()} shown`;
+      trajSummary.textContent = `${state.manifest.trajectory.length} poses`;
+      state.target = averagePoint(state.manifest.bounds);
+      attachInteractions();
+      buildTrajectoryList();
+      drawScene();
+    }
+
+    init().catch(error => {
+      datasetName.textContent = error.message;
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

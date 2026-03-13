@@ -1,0 +1,15 @@
+# Reproducible local environment
+.venv/
+
+# Python cache / tooling noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated reconstruction outputs
+outputs/
+outputs_photogrammetry/
+viewer_data/
+
+# Common local OS/editor files
+.DS_Store

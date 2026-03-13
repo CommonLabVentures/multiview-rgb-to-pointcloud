@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3Dstitch Compare Viewer</title>
+  <style>
+    :root {
+      --bg: #f2efe8;
+      --panel: rgba(255, 251, 245, 0.93);
+      --line: #d4c7b5;
+      --ink: #1d1b17;
+      --muted: #6a6256;
+      --tsdf: #c56e31;
+      --photo: #2f79ba;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Georgia", serif;
+      background:
+        radial-gradient(circle at top left, rgba(197, 110, 49, 0.12), transparent 25%),
+        radial-gradient(circle at top right, rgba(47, 121, 186, 0.1), transparent 25%),
+        linear-gradient(180deg, #faf7f2 0%, var(--bg) 100%);
+    }
+    .page { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    .header { display:flex; justify-content:space-between; align-items:end; gap:16px; margin-bottom:18px; }
+    h1 { margin:0; font-size:2rem; }
+    .subtle { color: var(--muted); font-size: .95rem; }
+    .layout { display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
+    .panel { background: var(--panel); border:1px solid var(--line); border-radius:22px; padding:14px; box-shadow:0 12px 30px rgba(0,0,0,.06); }
+    #scene { width:100%; height:min(80vh,920px); display:block; border-radius:16px; border:1px solid var(--line); background:linear-gradient(180deg,#fbf8f3 0%, #e9e1d5 100%); cursor:grab; }
+    #scene.dragging { cursor:grabbing; }
+    .toolbar, .stats { display:grid; gap:10px; margin-bottom:12px; }
+    .toolbar { grid-template-columns:1fr 1fr 1fr; }
+    .stats { grid-template-columns:1fr 1fr; }
+    button { border:1px solid #7a6950; background:#7a6950; color:white; border-radius:999px; padding:10px 14px; font:inherit; cursor:pointer; }
+    button.secondary { background:transparent; color:#7a6950; }
+    .stat { border:1px solid var(--line); border-radius:14px; padding:10px 12px; background: rgba(255,255,255,.45); }
+    .stat-title { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; }
+    .stat-value { margin-top:6px; font-size:1rem; }
+    .legend { display:grid; gap:10px; }
+    .legend-row { display:flex; align-items:center; gap:10px; }
+    .swatch { width:14px; height:14px; border-radius:999px; }
+    .list { max-height:min(58vh,760px); overflow:auto; border:1px solid var(--line); border-radius:16px; }
+    .row { width:100%; text-align:left; border:0; border-bottom:1px solid rgba(212,199,181,.7); border-radius:0; background:transparent; color:var(--ink); padding:10px 12px; display:grid; grid-template-columns:1fr auto; gap:8px; }
+    .row.active, .row:hover { background: rgba(122,105,80,.09); }
+    .meta { color:var(--muted); font-size:.85rem; }
+    @media (max-width: 1024px) { .layout,.toolbar,.stats { grid-template-columns:1fr; } #scene { height:56vh; } }
+  </style>
+</head>
+<body>
+  <!-- Comparison viewer: TSDF geometry, aligned photogrammetry geometry, and both trajectories. -->
+  <div class="page">
+    <div class="header">
+      <div>
+        <h1>3Dstitch Comparison Viewer</h1>
+        <div id="datasetName" class="subtle">Loading comparison...</div>
+      </div>
+      <div class="subtle">Trajectory similarity initializes alignment, then point-to-plane ICP tightens the cloud overlap</div>
+    </div>
+    <div class="layout">
+      <div class="panel">
+        <div class="toolbar">
+          <button id="toggleTsdf">TSDF: On</button>
+          <button id="togglePhoto">Photo: On</button>
+          <button id="toggleTraj" class="secondary">Traj: On</button>
+        </div>
+        <canvas id="scene" width="960" height="960"></canvas>
+      </div>
+      <div class="panel">
+        <div class="stats">
+          <div class="stat"><div class="stat-title">Shared Frames</div><div id="sharedStat" class="stat-value">-</div></div>
+          <div class="stat"><div class="stat-title">Trajectory RMS</div><div id="rmsStat" class="stat-value">-</div></div>
+          <div class="stat"><div class="stat-title">TSDF Points</div><div id="tsdfStat" class="stat-value">-</div></div>
+          <div class="stat"><div class="stat-title">Photo Points</div><div id="photoStat" class="stat-value">-</div></div>
+          <div class="stat"><div class="stat-title">ICP Fitness</div><div id="fitnessStat" class="stat-value">-</div></div>
+          <div class="stat"><div class="stat-title">ICP RMSE</div><div id="rmseIcpStat" class="stat-value">-</div></div>
+        </div>
+        <div class="legend">
+          <div class="legend-row"><span class="swatch" style="background:var(--tsdf)"></span><span>TSDF / ArUco world frame</span></div>
+          <div class="legend-row"><span class="swatch" style="background:var(--photo)"></span><span>Photogrammetry aligned into TSDF frame</span></div>
+        </div>
+        <div style="height:12px"></div>
+        <div id="simStat" class="subtle"></div>
+        <div style="height:12px"></div>
+        <div id="trajList" class="list"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // This viewer consumes the manifest produced by
+    // `tools/export_comparison_viewer.py`.
+    const params = new URLSearchParams(window.location.search);
+    const manifestPath = params.get("manifest") || "../viewer_data/comparison/sample_eye1_2026-03-10A/compare_manifest.json";
+    const state = {
+      manifest: null, yaw: .85, pitch: -.48, zoom: 1.6, target:[0,0,0], dragging:false, lastX:0, lastY:0,
+      showTsdf:true, showPhoto:true, showTraj:true, activeIndex:0
+    };
+    const datasetName = document.getElementById("datasetName");
+    const sharedStat = document.getElementById("sharedStat");
+    const rmsStat = document.getElementById("rmsStat");
+    const tsdfStat = document.getElementById("tsdfStat");
+    const photoStat = document.getElementById("photoStat");
+    const fitnessStat = document.getElementById("fitnessStat");
+    const rmseIcpStat = document.getElementById("rmseIcpStat");
+    const simStat = document.getElementById("simStat");
+    const trajList = document.getElementById("trajList");
+    const scene = document.getElementById("scene");
+    const toggleTsdf = document.getElementById("toggleTsdf");
+    const togglePhoto = document.getElementById("togglePhoto");
+    const toggleTraj = document.getElementById("toggleTraj");
+
+    function sub(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
+    function length3(v){ return Math.hypot(v[0],v[1],v[2]); }
+    function average(bounds){ return [(bounds.min[0]+bounds.max[0])*.5,(bounds.min[1]+bounds.max[1])*.5,(bounds.min[2]+bounds.max[2])*.5]; }
+    async function loadJson(path){ const r = await fetch(path); if(!r.ok) throw new Error(`Failed to load ${path}: ${r.status}`); return r.json(); }
+    function rotatePoint(p){
+      // Shared orbit-camera transform used for both geometry layers and the
+      // overlaid trajectories.
+      const dx=p[0]-state.target[0], dy=p[1]-state.target[1], dz=p[2]-state.target[2];
+      const cy=Math.cos(state.yaw), sy=Math.sin(state.yaw), cp=Math.cos(state.pitch), sp=Math.sin(state.pitch);
+      const x1=cy*dx+sy*dz, z1=-sy*dx+cy*dz, y1=cp*dy-sp*z1, z2=sp*dy+cp*z1;
+      return [x1,y1,z2];
+    }
+    function project(p,w,h,scale){
+      const r=rotatePoint(p); const depth=r[2]+state.zoom*scale*2.1; if(depth<=0.01) return null;
+      const focal=Math.min(w,h)*.78;
+      return {x:w*.5+(r[0]*focal)/depth,y:h*.5-(r[1]*focal)/depth,depth};
+    }
+    function drawPoints(ctx, points, colors, scale){
+      // Both clouds are rendered with the same painter's algorithm so their
+      // overlap can be inspected without a WebGL dependency.
+      const projected=[]; const w=scene.width, h=scene.height;
+      for(let i=0;i<points.length;i+=3){ const p=project([points[i],points[i+1],points[i+2]],w,h,scale); if(p) projected.push({...p,c:[colors[i],colors[i+1],colors[i+2]]}); }
+      projected.sort((a,b)=>b.depth-a.depth);
+      for(const p of projected){ ctx.fillStyle=`rgba(${p.c[0]}, ${p.c[1]}, ${p.c[2]}, 0.72)`; const r=Math.max(.8,3.2-p.depth*.45); ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill(); }
+    }
+    function drawTraj(ctx, scale){
+      if(!state.showTraj) return;
+      // The TSDF and photogrammetry trajectories are drawn as separate polylines
+      // so residual disagreement remains visible after alignment.
+      const entries=state.manifest.trajectory.map((item,index)=>({
+        index, tsdf:project(item.tsdf_position, scene.width, scene.height, scale),
+        photo:project(item.photo_position_icp || item.photo_position_aligned, scene.width, scene.height, scale)
+      })).filter(e=>e.tsdf && e.photo);
+      ctx.lineWidth=2;
+      ctx.strokeStyle="rgba(197,110,49,.8)"; ctx.beginPath(); let first=true;
+      for(const e of entries){ if(first){ctx.moveTo(e.tsdf.x,e.tsdf.y); first=false;} else {ctx.lineTo(e.tsdf.x,e.tsdf.y);} } ctx.stroke();
+      ctx.strokeStyle="rgba(47,121,186,.8)"; ctx.beginPath(); first=true;
+      for(const e of entries){ if(first){ctx.moveTo(e.photo.x,e.photo.y); first=false;} else {ctx.lineTo(e.photo.x,e.photo.y);} } ctx.stroke();
+      for(const e of entries){
+        const active=e.index===state.activeIndex;
+        ctx.fillStyle=active ? "#111" : "#c56e31"; ctx.beginPath(); ctx.arc(e.tsdf.x,e.tsdf.y,active?5:3.5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=active ? "#111" : "#2f79ba"; ctx.beginPath(); ctx.arc(e.photo.x,e.photo.y,active?5:3.5,0,Math.PI*2); ctx.fill();
+      }
+    }
+    function drawGrid(ctx, scale){
+      ctx.lineWidth=1; ctx.strokeStyle="rgba(106,98,86,.18)";
+      for(let i=-5;i<=5;i+=1){
+        const a=project([i*.05,0,-.25],scene.width,scene.height,scale), b=project([i*.05,0,.25],scene.width,scene.height,scale);
+        const c=project([-.25,0,i*.05],scene.width,scene.height,scale), d=project([.25,0,i*.05],scene.width,scene.height,scale);
+        if(a&&b){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+        if(c&&d){ ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(d.x,d.y); ctx.stroke(); }
+      }
+    }
+    function drawScene(){
+      const ctx=scene.getContext("2d"); ctx.clearRect(0,0,scene.width,scene.height); if(!state.manifest) return;
+      const scale=Math.max(length3(sub(state.manifest.bounds.max,state.manifest.bounds.min)), .35);
+      drawGrid(ctx, scale);
+      if(state.showTsdf) drawPoints(ctx, state.manifest.tsdf.points, state.manifest.tsdf.colors, scale);
+      if(state.showPhoto) drawPoints(ctx, state.manifest.photogrammetry.points, state.manifest.photogrammetry.colors, scale);
+      drawTraj(ctx, scale);
+    }
+    function highlight(index){
+      // Selecting a shared timestamp lets the operator compare the aligned pose
+      // locations for the same capture instant.
+      state.activeIndex=index;
+      for(const node of trajList.children){ node.classList.toggle("active", Number(node.dataset.index)===index); }
+      drawScene();
+    }
+    function buildList(){
+      trajList.innerHTML="";
+      state.manifest.trajectory.forEach((item,index)=>{
+        const photoPosition = item.photo_position_icp || item.photo_position_aligned;
+        const row=document.createElement("button"); row.type="button"; row.className="row"; row.dataset.index=String(index);
+        row.innerHTML=`<div><div>${item.timestamp}</div><div class="meta">TSDF ${item.tsdf_position.map(v=>v.toFixed(3)).join(", ")}</div></div><div class="meta">Photo ${photoPosition.map(v=>v.toFixed(3)).join(", ")}</div>`;
+        row.addEventListener("click", ()=>highlight(index)); trajList.appendChild(row);
+      });
+      highlight(0);
+    }
+    function attach(){
+      // Pointer handlers are kept minimal on purpose so the viewer works from a
+      // plain static host with no build tooling.
+      scene.addEventListener("pointerdown", e=>{ state.dragging=true; state.lastX=e.clientX; state.lastY=e.clientY; scene.classList.add("dragging"); });
+      window.addEventListener("pointerup", ()=>{ state.dragging=false; scene.classList.remove("dragging"); });
+      window.addEventListener("pointermove", e=>{ if(!state.dragging) return; const dx=e.clientX-state.lastX, dy=e.clientY-state.lastY; state.lastX=e.clientX; state.lastY=e.clientY; state.yaw+=dx*.01; state.pitch=Math.max(-1.4, Math.min(1.2, state.pitch+dy*.01)); drawScene(); });
+      scene.addEventListener("wheel", e=>{
+        e.preventDefault();
+        const factor = Math.exp(e.deltaY * 0.0015);
+        state.zoom = Math.max(0.02, Math.min(12, state.zoom * factor));
+        drawScene();
+      }, {passive:false});
+      toggleTsdf.addEventListener("click", ()=>{ state.showTsdf=!state.showTsdf; toggleTsdf.textContent=`TSDF: ${state.showTsdf?"On":"Off"}`; toggleTsdf.classList.toggle("secondary", !state.showTsdf); drawScene(); });
+      togglePhoto.addEventListener("click", ()=>{ state.showPhoto=!state.showPhoto; togglePhoto.textContent=`Photo: ${state.showPhoto?"On":"Off"}`; togglePhoto.classList.toggle("secondary", !state.showPhoto); drawScene(); });
+      toggleTraj.addEventListener("click", ()=>{ state.showTraj=!state.showTraj; toggleTraj.textContent=`Traj: ${state.showTraj?"On":"Off"}`; toggleTraj.classList.toggle("secondary", !state.showTraj); drawScene(); });
+    }
+    async function init(){
+      // The manifest already contains the alignment diagnostics, so the browser
+      // only needs to render and expose them; no extra math runs client-side.
+      state.manifest = await loadJson(manifestPath);
+      datasetName.textContent = `${state.manifest.dataset} | TSDF vs ${state.manifest.comparison.photo_geometry_kind} photogrammetry`;
+      sharedStat.textContent = state.manifest.comparison.shared_timestamps;
+      rmsStat.textContent = `${state.manifest.comparison.trajectory_rms_error_m.toFixed(4)}m`;
+      tsdfStat.textContent = state.manifest.tsdf.point_count.toLocaleString();
+      photoStat.textContent = state.manifest.photogrammetry.point_count.toLocaleString();
+      fitnessStat.textContent = state.manifest.comparison.icp.fitness.toFixed(6);
+      rmseIcpStat.textContent = `${state.manifest.comparison.icp.inlier_rmse_m.toFixed(6)}m`;
+      simStat.textContent = `Similarity scale ${state.manifest.comparison.photo_to_tsdf_similarity.scale.toFixed(5)} | ICP threshold ${state.manifest.comparison.icp.threshold_m.toFixed(3)}m | source ${state.manifest.comparison.photo_geometry_source}`;
+      state.target = average(state.manifest.bounds);
+      attach();
+      buildList();
+      drawScene();
+    }
+    init().catch(err=>{ datasetName.textContent = err.message; console.error(err); });
+  </script>
+</body>
+</html>
