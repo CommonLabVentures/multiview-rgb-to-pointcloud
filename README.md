@@ -14,6 +14,16 @@ The repository also contains browser-side inspection tools that export static JS
 
 This README is written as a handoff document for another computer vision engineer. It is intentionally explicit about the file contracts, execution flow, coordinate transforms, and current limitations.
 
+## Visual overview
+
+Four representative RGB frames from the tracked sample recording:
+
+![Sample RGB frames](docs/assets/sample_rgb_grid.jpg)
+
+Example dense fused point cloud preview generated locally from the sample dataset's photogrammetry output:
+
+![Dense point cloud preview](docs/assets/dense_pointcloud_preview.png)
+
 ## 1. Repository intent and current scope
 
 The workspace is not a framework or library. It is a set of focused scripts built around one captured dataset:
@@ -58,6 +68,10 @@ Top-level structure:
 ├── requirements.txt
 ├── .gitignore
 ├── context-from-chatgpt.md
+├── docs/
+│   └── assets/
+│       ├── sample_rgb_grid.jpg
+│       └── dense_pointcloud_preview.png
 ├── datasets/
 │   ├── README.md
 │   └── sample_eye1_2026-03-10A/
